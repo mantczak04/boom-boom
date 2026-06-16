@@ -69,3 +69,9 @@ class Env:
 
     def close(self) -> None:
         self._env.close()
+
+    def is_win(self) -> bool:
+        return self._env.board is not None and self._env.board.is_win()
+
+    def is_loss(self) -> bool:
+        return self._env.board is not None and self._env.board.is_loss()

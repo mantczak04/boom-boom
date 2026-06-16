@@ -20,6 +20,7 @@ rl = [
     "fastapi",
     "uvicorn[standard]",
     "pydantic",
+    "tqdm",
 ]
 
 [project.scripts]
