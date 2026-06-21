@@ -1,7 +1,8 @@
 # prob-minesweeper
 
 Probabilistic Minesweeper environment for reinforcement learning. Each cell has a mine
-probability `p ∈ [0, 1]`; whether a mine is present is sampled when the cell is revealed.
+probability `p ∈ [0, 1]`. Hidden mine outcomes are sampled at episode start from
+`Bernoulli(p_mine)`; the agent does not observe those outcomes until revealing cells.
 Built as a [Gymnasium](https://gymnasium.farama.org/) environment (`ProbMinesweeper-v0`).
 
 ## Requirements
@@ -15,7 +16,7 @@ Clone the repo and install dependencies from the project root:
 
 ```bash
 git clone <repo-url>
-cd boom-boom
+cd prob-minesweeper
 uv sync --dev
 ```
 
@@ -34,6 +35,19 @@ pip install -e ".[dev]"
 
 All commands below assume you are in the project root. With uv, prefix commands with
 `uv run`; with an activated venv, omit it.
+
+### Streamlit application
+
+The application combines manual play, agent demonstrations, benchmarks, and a concise
+description of the reinforcement-learning model:
+
+```bash
+uv run streamlit run app.py
+```
+
+The sidebar configures the board and probability distribution. In the Game tab, use
+either the cell buttons or the Random and Min-risk agent controls. The Benchmark tab
+evaluates both agents over reproducible episodes.
 
 ### Interactive play
 
@@ -126,7 +140,7 @@ uv run pytest tests/test_env.py::test_env_checker -v
 uv run pytest -x
 ```
 
-The suite currently has **79 tests** across:
+The suite covers the environment, board, agents, evaluation, CLI, and frontend imports.
 
 | File | Covers |
 |------|--------|
@@ -149,6 +163,34 @@ pyproject.toml      # metadata and dependencies
 uv.lock             # locked dependency versions (uv)
 ```
 
+## Agents
+
+- **Random** samples uniformly from actions allowed by `action_mask`.
+- **Min-risk** reveals the valid cell with the smallest known mine probability.
+
+These are reusable baselines rather than trained policies. They make agent behavior
+and benchmark results easy to explain and provide reference performance for future RL
+models.
+
+## Benchmarking
+
+Run the CLI random baseline with `prob-minesweeper benchmark`, or compare both agents
+in the Streamlit Benchmark tab. A fixed seed makes generated episode boards repeatable.
+
+## Mathematical model
+
+The environment is an MDP: the state contains revealed-cell state and optionally the
+probability field, an action reveals one cell, and transitions depend on hidden mine
+outcomes sampled at reset. The risk-adjusted reward encourages safe progress and adds
+a win bonus. The objective is to maximize expected discounted return.
+
+## Project scope for grade 4.0
+
+The project includes a Gymnasium backend, interactive Streamlit frontend, reusable
+agents, reproducible evaluation tooling, automated tests, and Polish report/defense
+material. Report screenshots should be added to `report/screenshots/` before submission.
+
 ## Dependencies
 
-Runtime: `gymnasium`, `numpy`, `scipy`. Dev: `pytest` (via `[project.optional-dependencies] dev`).
+Runtime: `gymnasium`, `numpy`, `scipy`, `streamlit`. Dev: `pytest` (via
+`[project.optional-dependencies] dev`).

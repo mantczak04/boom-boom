@@ -7,6 +7,7 @@ from __future__ import division
 import argparse
 import bz2
 from datetime import datetime
+import json
 import os
 import pickle
 
@@ -108,6 +109,24 @@ def save_memory(memory, memory_path, disable_bzip):
             pickle.dump(memory, zipped_pickle_file)
 
 
+def append_metrics(metrics_path: str, step: int, win_rate: float, mean_reward: float, mean_steps: float) -> None:
+    record = {
+        "step": step,
+        "win_rate": win_rate,
+        "mean_reward": mean_reward,
+        "mean_steps": mean_steps,
+    }
+    with open(metrics_path, "a", encoding="utf-8") as f:
+        f.write(json.dumps(record) + "\n")
+
+
+def save_checkpoint(dqn: Agent, checkpoint_dir: str) -> str:
+    os.makedirs(checkpoint_dir, exist_ok=True)
+    path = os.path.join(checkpoint_dir, "model.pt")
+    dqn.save(checkpoint_dir, "model.pt")
+    return path
+
+
 def main(argv: list[str] | None = None) -> None:
     args = parser.parse_args(argv)
     configure_args(args)
@@ -115,8 +134,13 @@ def main(argv: list[str] | None = None) -> None:
     print(" " * 26 + "Options")
     for k, v in vars(args).items():
         print(" " * 26 + k + ": " + str(v))
-    results_dir = os.path.join("results", args.id)
+    run_name = args.id
+    results_dir = os.path.join("results", run_name)
+    checkpoint_dir = os.path.join("checkpoints", run_name)
+    runs_dir = os.path.join("runs", run_name)
+    metrics_path = os.path.join(runs_dir, "metrics.jsonl")
     os.makedirs(results_dir, exist_ok=True)
+    os.makedirs(runs_dir, exist_ok=True)
     metrics = {"steps": [], "rewards": [], "Qs": [], "win_rates": [], "best_avg_reward": -float("inf")}
     np.random.seed(args.seed)
     torch.manual_seed(np.random.randint(1, 10000))
@@ -138,16 +162,12 @@ def main(argv: list[str] | None = None) -> None:
 
     dqn = Agent(args, env)
 
-    if args.model is not None and not args.evaluate:
-        if not args.memory:
-            raise ValueError("Cannot resume training without memory save path. Aborting...")
-        if not os.path.exists(args.memory):
-            raise ValueError(f"Could not find memory file at {args.memory}. Aborting...")
+    if args.model is not None and not args.evaluate and args.memory and os.path.exists(args.memory):
         mem = load_memory(args.memory, args.disable_bzip_memory)
     else:
         mem = ReplayMemory(args, args.memory_capacity)
 
-    priority_weight_increase = (1 - args.priority_weight) / (args.T_max - args.learn_start)
+    priority_weight_increase = (1 - args.priority_weight) / max(args.T_max - args.learn_start, 1)
 
     val_mem = ReplayMemory(args, args.evaluation_size)
     T, done = 0, True
@@ -162,8 +182,10 @@ def main(argv: list[str] | None = None) -> None:
 
     if args.evaluate:
         dqn.eval()
-        avg_reward, avg_Q, win_rate = test(args, 0, dqn, val_mem, metrics, results_dir, evaluate=True)
-        print(f"Avg. reward: {avg_reward} | Avg. Q: {avg_Q} | Win-rate: {100 * win_rate:.1f}%")
+        avg_reward, avg_Q, win_rate, mean_steps = test(args, 0, dqn, val_mem, metrics, results_dir, evaluate=True)
+        print(
+            f"Avg. reward: {avg_reward} | Avg. Q: {avg_Q} | Win-rate: {100 * win_rate:.1f}% | Mean steps: {mean_steps:.1f}"
+        )
     else:
         dqn.train()
         done = True
@@ -188,9 +210,12 @@ def main(argv: list[str] | None = None) -> None:
 
                 if T % args.evaluation_interval == 0:
                     dqn.eval()
-                    avg_reward, avg_Q, win_rate = test(args, T, dqn, val_mem, metrics, results_dir)
+                    avg_reward, avg_Q, win_rate, mean_steps = test(args, T, dqn, val_mem, metrics, results_dir)
+                    save_checkpoint(dqn, checkpoint_dir)
+                    append_metrics(metrics_path, T, win_rate, avg_reward, mean_steps)
                     log(
-                        f"T = {T} / {args.T_max} | Avg. reward: {avg_reward} | Avg. Q: {avg_Q} | Win-rate: {100 * win_rate:.1f}%"
+                        f"T = {T} / {args.T_max} | Avg. reward: {avg_reward} | Avg. Q: {avg_Q} | "
+                        f"Win-rate: {100 * win_rate:.1f}% | Mean steps: {mean_steps:.1f}"
                     )
                     dqn.train()
 
@@ -201,9 +226,21 @@ def main(argv: list[str] | None = None) -> None:
                     dqn.update_target_net()
 
                 if (args.checkpoint_interval != 0) and (T % args.checkpoint_interval == 0):
-                    dqn.save(results_dir, "checkpoint.pth")
+                    save_checkpoint(dqn, checkpoint_dir)
 
             state = next_state
+
+        dqn.eval()
+        avg_reward, avg_Q, win_rate, mean_steps = test(args, T, dqn, val_mem, metrics, results_dir)
+        save_checkpoint(dqn, checkpoint_dir)
+        if T % args.evaluation_interval != 0:
+            append_metrics(metrics_path, T, win_rate, avg_reward, mean_steps)
+        log(
+            f"Final | T = {T} | Avg. reward: {avg_reward} | Avg. Q: {avg_Q} | "
+            f"Win-rate: {100 * win_rate:.1f}% | Mean steps: {mean_steps:.1f}"
+        )
+        log(f"Checkpoint: {os.path.join(checkpoint_dir, 'model.pt')}")
+        log(f"Metrics: {metrics_path}")
 
     env.close()
 

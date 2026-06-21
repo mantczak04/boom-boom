@@ -8,6 +8,7 @@ dependencies = [
     "gymnasium>=0.29",
     "numpy>=1.24",
     "scipy>=1.11",
+    "streamlit>=1.35",
 ]
 
 [project.optional-dependencies]
@@ -21,6 +22,11 @@ rl = [
     "uvicorn[standard]",
     "pydantic",
     "tqdm",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
 ]
 
 [project.scripts]

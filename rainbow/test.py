@@ -25,23 +25,27 @@ def test(args, T, dqn, val_mem, metrics, results_dir, evaluate=False):
     env = Env(args)
     env.eval()
     metrics["steps"].append(T)
-    T_rewards, T_Qs = [], []
+    T_rewards, T_Qs, T_steps = [], [], []
     wins = 0
 
     # Test performance over several episodes
     done = True
     for _ in range(args.evaluation_episodes):
+        episode_steps = 0
         while True:
             if done:
                 state, reward_sum, done = env.reset(), 0, False
+                episode_steps = 0
 
             mask = env.action_mask()
             action = dqn.act_e_greedy(state, action_mask=mask)
             state, reward, done = env.step(action)
             reward_sum += reward
+            episode_steps += 1
 
             if done:
                 T_rewards.append(reward_sum)
+                T_steps.append(episode_steps)
                 if env.is_win():
                     wins += 1
                 break
@@ -53,6 +57,7 @@ def test(args, T, dqn, val_mem, metrics, results_dir, evaluate=False):
 
     avg_reward = sum(T_rewards) / len(T_rewards)
     avg_Q = sum(T_Qs) / len(T_Qs)
+    mean_steps = sum(T_steps) / len(T_steps)
     win_rate = wins / args.evaluation_episodes
     if not evaluate:
         # Save model parameters if improved
@@ -70,8 +75,8 @@ def test(args, T, dqn, val_mem, metrics, results_dir, evaluate=False):
             _plot_line(metrics["steps"], metrics["rewards"], "Reward", path=results_dir)
             _plot_line(metrics["steps"], metrics["Qs"], "Q", path=results_dir)
 
-    # Return average reward, Q-value, and win-rate
-    return avg_reward, avg_Q, win_rate
+    # Return average reward, Q-value, win-rate, and mean steps per episode
+    return avg_reward, avg_Q, win_rate, mean_steps
 
 
 # Plots min, max and mean + standard deviation bars of a population over time
