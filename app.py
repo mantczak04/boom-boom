@@ -2,13 +2,18 @@
 
 from __future__ import annotations
 
+import importlib.util
+from pathlib import Path
 from typing import Any
 
 import streamlit as st
 
-from prob_minesweeper.agents import MinRiskAgent, RandomAgent
+from prob_minesweeper.agents import DQNAgent, MinRiskAgent, RandomAgent
 from prob_minesweeper.env import ProbMinesweeperEnv
 from prob_minesweeper.evaluation import compare_agents
+
+
+DQN_MODEL_PATH = Path(__file__).resolve().parent / "models" / "dqn_prob_minesweeper.zip"
 
 
 # Classic Windows-style Minesweeper look. Scoped to the `minefield` container so
@@ -202,7 +207,24 @@ def _distribution_controls() -> tuple[str, dict[str, float]]:
 def _agent() -> Any:
     if st.session_state.selected_agent == "Random":
         return RandomAgent()
+    if st.session_state.selected_agent == "DQN":
+        return _load_dqn_agent(
+            str(DQN_MODEL_PATH), DQN_MODEL_PATH.stat().st_mtime_ns
+        )
     return MinRiskAgent()
+
+
+def _dqn_available() -> bool:
+    return (
+        DQN_MODEL_PATH.is_file()
+        and importlib.util.find_spec("stable_baselines3") is not None
+    )
+
+
+@st.cache_resource
+def _load_dqn_agent(model_path: str, model_mtime_ns: int) -> DQNAgent:
+    del model_mtime_ns  # It is part of the cache key and reloads replaced models.
+    return DQNAgent(model_path)
 
 
 def _revealed_cell_html(cell: Any) -> str:
@@ -251,9 +273,19 @@ def _render_game(show_probabilities: bool) -> None:
                     use_container_width=True,
                 )
 
+    agent_options = ["Random", "Min-risk"]
+    if _dqn_available():
+        agent_options.append("DQN")
     st.session_state.selected_agent = st.selectbox(
-        "Agent", ["Random", "Min-risk"], index=1, key="agent_selector"
+        "Agent", agent_options, index=1, key="agent_selector"
     )
+    if not DQN_MODEL_PATH.is_file():
+        st.info(
+            "DQN model not found. Train it with: "
+            "`uv run python experiments/train_dqn.py --timesteps 50000`"
+        )
+    elif not _dqn_available():
+        st.info("Install the RL dependencies with: `uv sync --dev --extra rl`")
     move_col, run_col = st.columns(2)
     if move_col.button("Agent move", disabled=disabled_game, use_container_width=True):
         reveal(_agent().select_action(st.session_state.obs, st.session_state.info, env))
@@ -280,9 +312,16 @@ def _benchmark_tab(
 ) -> None:
     episodes = st.number_input("Episodes", min_value=1, max_value=10_000, value=100)
     if st.button("Run benchmark", type="primary"):
+        agents: list[Any] = [RandomAgent(seed), MinRiskAgent()]
+        if _dqn_available():
+            agents.append(
+                _load_dqn_agent(
+                    str(DQN_MODEL_PATH), DQN_MODEL_PATH.stat().st_mtime_ns
+                )
+            )
         with st.spinner("Evaluating agents..."):
             st.session_state.benchmark_results = compare_agents(
-                [RandomAgent(seed), MinRiskAgent()],
+                agents,
                 episodes=int(episodes),
                 width=width,
                 height=height,
@@ -311,7 +350,7 @@ def _benchmark_tab(
 
 def _model_tab() -> None:
     st.markdown(
-        """
+        r"""
 ### Reinforcement-learning model
 
 The environment is a Markov decision process. State $s_t$ contains revealed-cell
@@ -321,10 +360,26 @@ Bernoulli distribution, making episode transitions stochastic.
 
 The risk-adjusted reward is $1-p_a$ for a safe reveal, $-p_a$ for a mine hit,
 $1-p_a+B$ for the winning reveal, and $0$ for a no-op. The learning objective is to
-maximize expected discounted return $\\mathbb{E}[\\sum_t \\gamma^t r_t]$.
+maximize expected discounted return $\mathbb{E}[\sum_t \gamma^t r_t]$.
 
 Random chooses uniformly among valid actions. Min-risk uses the visible probability
 field and chooses the valid cell with the lowest $p_a$.
+
+### Deep Q-Network
+
+The DQN model learns $Q(s,a)$: the expected long-term value of selecting cell $a$
+in board state $s$. Unlike Min-risk, which only minimizes immediate mine probability,
+DQN estimates future reward and can learn policies that trade off immediate risk and
+long-term board progress. Training uses flattened board observations.
+
+The Bellman target and squared temporal-difference loss are
+
+$$y = r + \gamma \max_{a'} Q(s',a'),$$
+
+$$L(\theta) = \left(y - Q_\theta(s,a)\right)^2.$$
+
+Stable-Baselines3 DQN does not apply the environment's `action_mask` during training.
+At inference time, an invalid prediction is replaced by a valid Min-risk action.
 """
     )
 

@@ -4,7 +4,7 @@
 
 Celem jest aplikacja prezentująca probabilistyczny wariant Sapera jako środowisko
 uczenia ze wzmocnieniem (RL). Projekt łączy backend zgodny z Gymnasium, interfejs
-Streamlit oraz porównanie dwóch agentów bazowych.
+Streamlit oraz porównanie dwóch agentów bazowych z wytrenowanym agentem DQN.
 
 ## 2. Opis problemu
 
@@ -54,7 +54,29 @@ już odkryte. Testy sprawdzają logikę domenową, API Gymnasium, agentów i ewa
 
 `RandomAgent` losuje jednostajnie spośród dozwolonych akcji. `MinRiskAgent` wybiera
 dozwolone pole o najmniejszym $p_{r,c}$; przy remisie wybiera pierwsze. Obaj agenci są
-punktami odniesienia dla przyszłego trenowanego modelu RL.
+punktami odniesienia dla wytrenowanego modelu DQN.
+
+## Deep Q-Network jako wykorzystany model RL
+
+W projekcie wykorzystano gotową implementację DQN z biblioteki Stable-Baselines3.
+DQN pasuje do środowiska, ponieważ przestrzeń akcji jest dyskretna: każda akcja jest
+indeksem jednego pola. Sieć uczy się funkcji wartości akcji $Q(s,a)$, czyli oczekiwanej
+długoterminowej wartości odkrycia pola $a$ w stanie $s$. Celem uczenia jest przybliżenie
+celu Bellmana
+
+$$
+y = r + \gamma \max_{a'} Q(s',a'),
+$$
+
+przy użyciu błędu $(y-Q_\theta(s,a))^2$. Tensor planszy $H\times W\times C$ jest przed
+podaniem do polityki MLP spłaszczany do wektora. W odróżnieniu od `MinRiskAgent`, który
+stosuje stałą lokalną regułę minimalizacji bieżącego $p_{r,c}$, DQN uczy się na podstawie
+interakcji i uwzględnia zdyskontowane przyszłe nagrody.
+
+Stable-Baselines3 DQN nie wykorzystuje automatycznie `action_mask` podczas treningu.
+Podczas ewaluacji i demonstracji przewidziana już odkryta akcja jest zastępowana
+dozwoloną akcją `MinRiskAgent`; awaryjnie losowana jest dowolna akcja dozwolona. Model
+jest trenowany i oceniany na planszy o tym samym rozmiarze.
 
 ## 7. Eksperymenty
 
@@ -69,20 +91,25 @@ liczbę epizodów.
 |---|---:|---:|---:|---:|---:|---:|---:|
 | Random | TODO | TODO | TODO | TODO | TODO | TODO | TODO |
 | Min-risk | TODO | TODO | TODO | TODO | TODO | TODO | TODO |
+| DQN | TODO | TODO | TODO | TODO | TODO | TODO | TODO |
 
 Przed oddaniem należy wkleić wyniki z zakładki Benchmark oraz zrzuty interfejsu
 do `report/screenshots/`.
 
 ## 9. Wnioski
 
-Porównanie pokazuje wpływ jawnej informacji o ryzyku na strategię. Ograniczeniem
-`MinRiskAgent` jest brak planowania długoterminowego. Naturalnym rozszerzeniem jest
-wytrenowanie DQN lub PPO i porównanie z obiema bazami przy identycznych seedach.
+Porównanie pokazuje wpływ jawnej informacji o ryzyku i uczenia wartości przyszłych
+nagród na strategię. `MinRiskAgent` może osiągać lepsze wyniki, ponieważ bezpośrednio
+korzysta z $p_{r,c}$ i jest silną heurystyką lokalną. DQN pozostaje jednak polityką
+wyuczoną, a nie z góry zapisaną regułą. Ograniczeniami są niestabilność treningu,
+brak maskowania akcji w samym algorytmie oraz zależność modelu od rozmiaru planszy.
 
 ## 10. Instrukcja uruchomienia
 
 ```bash
-uv sync --dev
+uv sync --dev --extra rl
 uv run pytest -q
+uv run python experiments/train_dqn.py --timesteps 50000
+uv run python experiments/evaluate_dqn.py --episodes 100
 uv run streamlit run app.py
 ```

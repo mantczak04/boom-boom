@@ -46,8 +46,28 @@ uv run streamlit run app.py
 ```
 
 The sidebar configures the board and probability distribution. In the Game tab, use
-either the cell buttons or the Random and Min-risk agent controls. The Benchmark tab
-evaluates both agents over reproducible episodes.
+either the cell buttons or the Random, Min-risk, and (when trained) DQN agent controls.
+The Benchmark tab evaluates available agents over reproducible episodes.
+
+### DQN agent
+
+DQN support is optional. Install the RL dependencies, train the default 5x5 model,
+evaluate it, and start the application with:
+
+```bash
+uv sync --dev --extra rl
+uv run python experiments/train_dqn.py --timesteps 50000
+uv run python experiments/evaluate_dqn.py --episodes 100
+uv run streamlit run app.py
+```
+
+Training saves `models/dqn_prob_minesweeper.zip`. Use matching `--width`, `--height`,
+and `--distribution` options when training and evaluating a non-default model. For a
+quick end-to-end check, reduce `--timesteps` to `1000`.
+
+If no trained model exists, the Streamlit app still works with RandomAgent and
+MinRiskAgent. DQN predictions that target an already revealed cell are replaced by a
+valid Min-risk action during evaluation and in the application.
 
 ### Interactive play
 
@@ -167,15 +187,17 @@ uv.lock             # locked dependency versions (uv)
 
 - **Random** samples uniformly from actions allowed by `action_mask`.
 - **Min-risk** reveals the valid cell with the smallest known mine probability.
+- **DQN** loads a trained Stable-Baselines3 action-value model and safely handles
+  invalid predictions using `action_mask`.
 
-These are reusable baselines rather than trained policies. They make agent behavior
-and benchmark results easy to explain and provide reference performance for future RL
-models.
+Random and Min-risk are reusable baselines. DQN is a learned policy compared against
+both reference strategies.
 
 ## Benchmarking
 
-Run the CLI random baseline with `prob-minesweeper benchmark`, or compare both agents
-in the Streamlit Benchmark tab. A fixed seed makes generated episode boards repeatable.
+Run the CLI random baseline with `prob-minesweeper benchmark`, or compare available
+agents in the Streamlit Benchmark tab. A fixed seed makes generated episode boards
+repeatable.
 
 ## Mathematical model
 
@@ -193,4 +215,5 @@ material. Report screenshots should be added to `report/screenshots/` before sub
 ## Dependencies
 
 Runtime: `gymnasium`, `numpy`, `scipy`, `streamlit`. Dev: `pytest` (via
-`[project.optional-dependencies] dev`).
+`[project.optional-dependencies] dev`). Optional RL dependencies, including
+`stable-baselines3`, are installed through the `rl` extra.
