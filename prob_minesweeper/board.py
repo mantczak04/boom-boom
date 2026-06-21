@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from enum import Enum
 
@@ -17,6 +18,8 @@ _NEIGHBOUR_OFFSETS = (
     (1, 0),
     (1, 1),
 )
+
+CLUE_MODES = ("prob_sum", "actual_count")
 
 
 @dataclass
@@ -50,26 +53,48 @@ class Board:
     height: int
     width: int
     cells: list[list[Cell]]
+    clue_mode: str = "prob_sum"
     _mine_outcomes: np.ndarray | None = None
 
     @classmethod
-    def create(cls, height: int, width: int, p_mines: np.ndarray) -> Board:
+    def create(
+        cls,
+        height: int,
+        width: int,
+        p_mines: np.ndarray,
+        clue_mode: str = "prob_sum",
+    ) -> Board:
         if p_mines.shape != (height, width):
             raise ValueError(
                 f"p_mines shape {p_mines.shape} does not match board ({height}, {width})"
             )
+        if clue_mode not in CLUE_MODES:
+            valid = ", ".join(CLUE_MODES)
+            raise ValueError(f"clue_mode {clue_mode!r} must be one of: {valid}")
         cells = [
             [Cell(p_mine=float(p_mines[row, col])) for col in range(width)]
             for row in range(height)
         ]
-        return cls(height=height, width=width, cells=cells)
+        return cls(height=height, width=width, cells=cells, clue_mode=clue_mode)
 
-    def new_episode(self, rng: np.random.Generator) -> None:
-        """Sample hidden mine outcomes and reset visible state."""
+    def new_episode(
+        self,
+        rng: np.random.Generator,
+        guaranteed_safe: Iterable[tuple[int, int]] = (),
+    ) -> None:
+        """Sample hidden outcomes, optionally forcing selected cells safe."""
+        safe_cells = tuple(guaranteed_safe)
+        for row, col in safe_cells:
+            if not self.in_bounds(row, col):
+                raise ValueError(
+                    f"guaranteed-safe cell ({row}, {col}) is outside the board"
+                )
         p_mines = self.p_mine_field()
         self._mine_outcomes = (rng.random((self.height, self.width)) < p_mines).astype(
             np.float64
         )
+        for row, col in safe_cells:
+            self._mine_outcomes[row, col] = 0.0
         for row in range(self.height):
             for col in range(self.width):
                 cell = self.cells[row][col]
@@ -100,6 +125,23 @@ class Board:
 
     def cell(self, row: int, col: int) -> Cell:
         return self.cells[row][col]
+
+    def neighbour_mine_count(self, row: int, col: int) -> int:
+        """Return the sampled number of neighbouring mines."""
+        if self._mine_outcomes is None:
+            raise RuntimeError("Call new_episode() before reading hidden outcomes")
+        return sum(
+            int(self._mine_outcomes[nr, nc])
+            for nr, nc in self.iter_neighbours(row, col)
+        )
+
+    def clue_value(self, row: int, col: int) -> float:
+        """Return the visible clue under the configured rule variant."""
+        if self.clue_mode == "prob_sum":
+            return self.neighbour_p_sum(self.p_mine_field(), row, col)
+        if self.clue_mode == "actual_count":
+            return float(self.neighbour_mine_count(row, col))
+        raise ValueError(f"Unknown clue_mode: {self.clue_mode!r}")
 
     def flat_index(self, row: int, col: int) -> int:
         return row * self.width + col
@@ -143,7 +185,7 @@ class Board:
         if has_mine:
             return RevealResult.MINE_HIT
 
-        cell.display_value = self.neighbour_p_sum(self.p_mine_field(), row, col)
+        cell.display_value = self.clue_value(row, col)
         if self.is_win():
             return RevealResult.WIN
         return RevealResult.SAFE

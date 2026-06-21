@@ -10,6 +10,7 @@ import numpy as np
 
 from prob_minesweeper.distributions import MineDistribution
 from prob_minesweeper.env import ProbMinesweeperEnv
+from prob_minesweeper.rewards import REWARD_MODES, make_reward_config
 
 
 @dataclass(frozen=True)
@@ -58,6 +59,10 @@ def run_benchmark(
     height: int = 9,
     distribution: str | MineDistribution = "correlated",
     distribution_kwargs: dict[str, float] | None = None,
+    obs_mode: str = "state",
+    clue_mode: str = "prob_sum",
+    initial_reveal: str = "none",
+    reward_mode: str = "risk_adjusted",
     seed: int | None = None,
 ) -> BenchmarkStats:
     """Run a random valid-action agent for ``episodes`` episodes."""
@@ -69,6 +74,10 @@ def run_benchmark(
         height=height,
         distribution=distribution,
         distribution_kwargs=distribution_kwargs,
+        obs_mode=obs_mode,
+        clue_mode=clue_mode,
+        initial_reveal=initial_reveal,
+        reward_config=make_reward_config(reward_mode),
         render_mode=None,
     )
     rng = np.random.default_rng(seed)
@@ -138,6 +147,7 @@ def cmd_play(args: argparse.Namespace) -> None:
         height=args.height,
         distribution=args.distribution,
         obs_mode="state+prob",
+        initial_reveal=args.initial_reveal,
         render_mode="human",
         seed=args.seed,
     )
@@ -199,6 +209,10 @@ def cmd_benchmark(args: argparse.Namespace) -> None:
         height=args.height,
         distribution=args.distribution,
         distribution_kwargs=distribution_kwargs,
+        obs_mode=args.obs_mode,
+        clue_mode=args.clue_mode,
+        initial_reveal=args.initial_reveal,
+        reward_mode=args.reward_mode,
         seed=args.seed,
     )
     print(format_benchmark_stats(stats))
@@ -221,6 +235,12 @@ def _build_parser() -> argparse.ArgumentParser:
             help="Mine probability field generator",
         )
         p.add_argument("--seed", type=int, default=None, help="RNG seed")
+        p.add_argument(
+            "--initial-reveal",
+            choices=("none", "safe_2x2"),
+            default="none",
+            help="Cells automatically revealed at episode start",
+        )
 
     play = sub.add_parser("play", help="Interactive human play")
     add_env_args(play)
@@ -239,6 +259,24 @@ def _build_parser() -> argparse.ArgumentParser:
         type=float,
         default=None,
         help="Mine probability for constant distribution",
+    )
+    bench.add_argument(
+        "--obs-mode",
+        choices=("state", "state+prob"),
+        default="state",
+        help="Observation channels exposed to the agent",
+    )
+    bench.add_argument(
+        "--clue-mode",
+        choices=("prob_sum", "actual_count"),
+        default="prob_sum",
+        help="Clue shown on safe revealed cells",
+    )
+    bench.add_argument(
+        "--reward-mode",
+        choices=REWARD_MODES,
+        default="risk_adjusted",
+        help="Reward configuration",
     )
     bench.set_defaults(func=cmd_benchmark)
 

@@ -101,9 +101,9 @@ def test_main_benchmark(capsys) -> None:
             "--episodes",
             "3",
             "--width",
-            "2",
+            "3",
             "--height",
-            "2",
+            "3",
             "--distribution",
             "constant",
             "--p",
@@ -115,6 +115,33 @@ def test_main_benchmark(capsys) -> None:
     out = capsys.readouterr().out
     assert "Episodes: 3" in out
     assert "Wins: 3 (100.0%)" in out
+
+
+def test_main_benchmark_hidden_risk_options(capsys) -> None:
+    main(
+        [
+            "benchmark",
+            "--episodes",
+            "2",
+            "--width",
+            "3",
+            "--height",
+            "3",
+            "--distribution",
+            "constant",
+            "--p",
+            "0",
+            "--obs-mode",
+            "state",
+            "--clue-mode",
+            "actual_count",
+            "--initial-reveal",
+            "safe_2x2",
+            "--reward-mode",
+            "completion",
+        ]
+    )
+    assert "Wins: 2 (100.0%)" in capsys.readouterr().out
 
 
 def test_build_parser_requires_command() -> None:

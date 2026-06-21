@@ -14,6 +14,7 @@ from prob_minesweeper.rewards import RewardConfig
         (RewardConfig.risk_adjusted, 1.0, 0.0, -1.0),
         (RewardConfig.sparse, 0.5, 0.0, -1.0),
         (RewardConfig.uniform, 0.5, 1.0, -1.0),
+        (RewardConfig.completion, 0.5, 0.1, -1.0),
     ],
 )
 def test_factory_reveal_and_mine_rewards(
@@ -50,3 +51,11 @@ def test_sparse_ignores_p_mine_on_safe_reveal() -> None:
     for p in (0.0, 0.5, 1.0):
         assert config.reward_for_reveal(p, RevealResult.SAFE) == 0.0
         assert config.reward_for_reveal(p, RevealResult.WIN) == pytest.approx(1.0)
+
+
+def test_completion_reward_outcomes() -> None:
+    config = RewardConfig.completion()
+    assert config.reward_for_reveal(0.7, RevealResult.SAFE) == pytest.approx(0.1)
+    assert config.reward_for_reveal(0.7, RevealResult.MINE_HIT) == -1.0
+    assert config.reward_for_reveal(0.7, RevealResult.WIN) == pytest.approx(10.1)
+    assert config.reward_for_reveal(0.7, RevealResult.NOOP) == 0.0

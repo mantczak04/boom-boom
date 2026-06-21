@@ -7,6 +7,7 @@ from pathlib import Path
 
 from prob_minesweeper.agents import DQNAgent
 from prob_minesweeper.evaluation import EvaluationResult, evaluate_agent
+from prob_minesweeper.rewards import REWARD_MODES, make_reward_config
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -21,6 +22,18 @@ def build_parser() -> argparse.ArgumentParser:
         "--distribution",
         choices=("constant", "uniform", "correlated"),
         default="correlated",
+    )
+    parser.add_argument(
+        "--obs-mode", choices=("state", "state+prob"), default="state"
+    )
+    parser.add_argument(
+        "--clue-mode", choices=("prob_sum", "actual_count"), default="actual_count"
+    )
+    parser.add_argument(
+        "--initial-reveal", choices=("none", "safe_2x2"), default="safe_2x2"
+    )
+    parser.add_argument(
+        "--reward-mode", choices=REWARD_MODES, default="completion"
     )
     parser.add_argument("--seed", type=int, default=123)
     return parser
@@ -44,6 +57,20 @@ def print_result(result: EvaluationResult) -> None:
 
 def main() -> None:
     args = build_parser().parse_args()
+    print("Environment configuration")
+    configuration = (
+        ("width", args.width),
+        ("height", args.height),
+        ("distribution", args.distribution),
+        ("obs_mode", args.obs_mode),
+        ("clue_mode", args.clue_mode),
+        ("initial_reveal", args.initial_reveal),
+        ("reward_mode", args.reward_mode),
+    )
+    label_width = max(len(label) for label, _ in configuration)
+    for label, value in configuration:
+        print(f"{label:<{label_width}} : {value}")
+    print()
     agent = DQNAgent(args.model)
     result = evaluate_agent(
         agent,
@@ -51,6 +78,10 @@ def main() -> None:
         width=args.width,
         height=args.height,
         distribution=args.distribution,
+        obs_mode=args.obs_mode,
+        clue_mode=args.clue_mode,
+        initial_reveal=args.initial_reveal,
+        reward_config=make_reward_config(args.reward_mode),
         seed=args.seed,
     )
     print_result(result)

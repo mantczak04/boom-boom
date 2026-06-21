@@ -51,7 +51,7 @@ class DQNAgent:
             raise ValueError(
                 "DQN model observation shape does not match this board: "
                 f"expected {tuple(expected_shape)}, got {tuple(flat_obs.shape[1:])}. "
-                "Train and evaluate DQN with the same width and height."
+                "Train and evaluate DQN with the same width, height, and obs_mode."
             )
         predicted, _ = self.model.predict(flat_obs, deterministic=True)
         action = int(np.asarray(predicted).reshape(-1)[0])

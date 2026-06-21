@@ -2,7 +2,7 @@
 
 from gymnasium.envs.registration import register
 
-from prob_minesweeper.board import Board, Cell, RevealResult
+from prob_minesweeper.board import CLUE_MODES, Board, Cell, RevealResult
 from prob_minesweeper.distributions import (
     ConstantDistribution,
     CorrelatedDistribution,
@@ -10,8 +10,8 @@ from prob_minesweeper.distributions import (
     UniformDistribution,
     make_distribution,
 )
-from prob_minesweeper.env import ProbMinesweeperEnv
-from prob_minesweeper.rewards import RewardConfig
+from prob_minesweeper.env import INITIAL_REVEAL_MODES, ProbMinesweeperEnv
+from prob_minesweeper.rewards import REWARD_MODES, RewardConfig, make_reward_config
 
 __version__ = "0.1.0"
 
@@ -23,10 +23,14 @@ register(
 __all__ = [
     "__version__",
     "Board",
+    "CLUE_MODES",
     "Cell",
     "RevealResult",
     "RewardConfig",
+    "REWARD_MODES",
+    "make_reward_config",
     "ProbMinesweeperEnv",
+    "INITIAL_REVEAL_MODES",
     "MineDistribution",
     "CorrelatedDistribution",
     "UniformDistribution",

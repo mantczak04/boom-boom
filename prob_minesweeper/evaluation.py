@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Any, Iterable
 
 from prob_minesweeper.env import ProbMinesweeperEnv
+from prob_minesweeper.rewards import RewardConfig
 
 
 @dataclass(frozen=True)
@@ -43,7 +44,10 @@ def evaluate_agent(
     height: int = 5,
     distribution: Any = "correlated",
     distribution_kwargs: dict[str, Any] | None = None,
-    obs_mode: str = "state+prob",
+    obs_mode: str = "state",
+    clue_mode: str = "actual_count",
+    initial_reveal: str = "safe_2x2",
+    reward_config: RewardConfig | None = None,
     seed: int | None = None,
 ) -> EvaluationResult:
     if episodes < 1:
@@ -54,6 +58,9 @@ def evaluate_agent(
         distribution=distribution,
         distribution_kwargs=distribution_kwargs,
         obs_mode=obs_mode,
+        clue_mode=clue_mode,
+        initial_reveal=initial_reveal,
+        reward_config=reward_config or RewardConfig.completion(),
     )
     wins = losses = truncations = total_steps = 0
     total_reward = 0.0
@@ -94,6 +101,10 @@ def compare_agents(
     height: int,
     distribution: Any,
     distribution_kwargs: dict[str, Any] | None = None,
+    obs_mode: str = "state",
+    clue_mode: str = "actual_count",
+    initial_reveal: str = "safe_2x2",
+    reward_config: RewardConfig | None = None,
     seed: int | None = None,
 ) -> list[EvaluationResult]:
     return [
@@ -104,6 +115,10 @@ def compare_agents(
             height=height,
             distribution=distribution,
             distribution_kwargs=distribution_kwargs,
+            obs_mode=obs_mode,
+            clue_mode=clue_mode,
+            initial_reveal=initial_reveal,
+            reward_config=reward_config,
             seed=seed,
         )
         for agent in agents

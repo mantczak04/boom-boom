@@ -8,12 +8,13 @@ import gymnasium as gym
 import numpy as np
 from gymnasium import spaces
 
-from prob_minesweeper.board import Board, RevealResult
+from prob_minesweeper.board import CLUE_MODES, Board, RevealResult
 from prob_minesweeper.distributions import MineDistribution, make_distribution
 from prob_minesweeper.rewards import RewardConfig
 
 _OBS_MODES = ("state", "state+prob")
 _NUM_CHANNELS = {"state": 3, "state+prob": 4}
+INITIAL_REVEAL_MODES = ("none", "safe_2x2")
 # Eight neighbours, each p_mine <= 1.0
 _MAX_DISPLAY_VALUE = 8.0
 
@@ -34,6 +35,8 @@ class ProbMinesweeperEnv(gym.Env):
         max_steps: int | None = None,
         render_mode: str | None = None,
         seed: int | None = None,
+        clue_mode: str = "prob_sum",
+        initial_reveal: str = "none",
     ) -> None:
         super().__init__()
 
@@ -42,12 +45,29 @@ class ProbMinesweeperEnv(gym.Env):
         if obs_mode not in _OBS_MODES:
             valid = ", ".join(_OBS_MODES)
             raise ValueError(f"obs_mode {obs_mode!r} must be one of: {valid}")
+        if clue_mode not in CLUE_MODES:
+            valid = ", ".join(CLUE_MODES)
+            raise ValueError(f"clue_mode {clue_mode!r} must be one of: {valid}")
+        if initial_reveal not in INITIAL_REVEAL_MODES:
+            valid = ", ".join(INITIAL_REVEAL_MODES)
+            raise ValueError(
+                f"initial_reveal {initial_reveal!r} must be one of: {valid}"
+            )
+        if initial_reveal == "safe_2x2" and (
+            width < 2 or height < 2 or width * height <= 4
+        ):
+            raise ValueError(
+                "initial_reveal='safe_2x2' requires a board with a 2x2 region "
+                "and at least one additional cell"
+            )
         if render_mode is not None and render_mode not in self.metadata["render_modes"]:
             raise ValueError(f"render_mode {render_mode!r} is not supported")
 
         self.width = width
         self.height = height
         self.obs_mode = obs_mode
+        self.clue_mode = clue_mode
+        self.initial_reveal = initial_reveal
         self._num_channels = _NUM_CHANNELS[obs_mode]
         self._distribution = make_distribution(
             distribution, **(distribution_kwargs or {})
@@ -80,8 +100,40 @@ class ProbMinesweeperEnv(gym.Env):
         super().reset(seed=seed)
 
         p_mines = self._distribution.generate(self.height, self.width, self.np_random)
-        self.board = Board.create(self.height, self.width, p_mines)
-        self.board.new_episode(self.np_random)
+        self.board = Board.create(
+            self.height,
+            self.width,
+            p_mines,
+            clue_mode=self.clue_mode,
+        )
+        opening_cells: tuple[tuple[int, int], ...] = ()
+        guaranteed_safe: tuple[tuple[int, int], ...] = ()
+        if self.initial_reveal == "safe_2x2":
+            top = int(self.np_random.integers(0, self.height - 1))
+            left = int(self.np_random.integers(0, self.width - 1))
+            opening_cells = (
+                (top, left),
+                (top, left + 1),
+                (top + 1, left),
+                (top + 1, left + 1),
+            )
+            opening_set = set(opening_cells)
+            remaining = [
+                (row, col)
+                for row in range(self.height)
+                for col in range(self.width)
+                if (row, col) not in opening_set
+            ]
+            continuation = remaining[int(self.np_random.integers(0, len(remaining)))]
+            guaranteed_safe = (*opening_cells, continuation)
+
+        self.board.new_episode(self.np_random, guaranteed_safe=guaranteed_safe)
+        for row, col in opening_cells:
+            result = self.board.reveal(row, col)
+            if result not in (RevealResult.SAFE,):
+                raise RuntimeError(
+                    f"Invalid initial reveal result for ({row}, {col}): {result.value}"
+                )
         self._step_count = 0
 
         return self._get_obs(), self._get_info()
@@ -144,4 +196,4 @@ class ProbMinesweeperEnv(gym.Env):
         return None
 
 
-__all__ = ["ProbMinesweeperEnv"]
+__all__ = ["INITIAL_REVEAL_MODES", "ProbMinesweeperEnv"]

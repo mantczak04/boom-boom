@@ -36,6 +36,41 @@ def test_reveal_safe_sets_display_value() -> None:
     assert cell.display_value == Board.neighbour_p_sum(board.p_mine_field(), 1, 1)
 
 
+def test_actual_count_uses_sampled_neighbouring_mines() -> None:
+    p_mines = np.full((3, 3), 0.25, dtype=np.float32)
+    board = Board.create(3, 3, p_mines, clue_mode="actual_count")
+    board.new_episode(np.random.default_rng(1))
+
+    assert board.neighbour_mine_count(1, 1) == 1
+    assert board.reveal(1, 1) == RevealResult.SAFE
+    assert board.cell(1, 1).display_value == 1.0
+
+
+def test_prob_sum_remains_available_as_default_clue() -> None:
+    p_mines = np.full((3, 3), 0.25, dtype=np.float32)
+    board = Board.create(3, 3, p_mines)
+    board.new_episode(np.random.default_rng(1))
+
+    board.reveal(1, 1)
+    assert board.cell(1, 1).display_value == 2.0
+
+
+def test_neighbour_mine_count_requires_episode() -> None:
+    board = _board_with_p(0.0)
+    with pytest.raises(RuntimeError, match="new_episode"):
+        board.neighbour_mine_count(1, 1)
+
+
+def test_invalid_clue_mode_raises() -> None:
+    with pytest.raises(ValueError, match="clue_mode"):
+        Board.create(
+            2,
+            2,
+            np.zeros((2, 2), dtype=np.float32),
+            clue_mode="unknown",
+        )
+
+
 def test_reveal_noop_on_already_revealed() -> None:
     board = _board_with_p(0.0)
     board.new_episode(np.random.default_rng(0))
@@ -81,6 +116,22 @@ def test_new_episode_reproducible_with_seed() -> None:
     board_a.new_episode(np.random.default_rng(42))
     board_b.new_episode(np.random.default_rng(42))
     np.testing.assert_array_equal(board_a.hidden_mine_mask(), board_b.hidden_mine_mask())
+
+
+def test_new_episode_can_force_cells_safe() -> None:
+    board = _board_with_p(1.0)
+    safe_cells = ((0, 0), (0, 1), (1, 0), (1, 1))
+    board.new_episode(np.random.default_rng(0), guaranteed_safe=safe_cells)
+
+    for row, col in safe_cells:
+        assert not board.hidden_mine_mask()[row, col]
+        assert not board.cell(row, col).is_revealed
+
+
+def test_guaranteed_safe_cell_must_be_in_bounds() -> None:
+    board = _board_with_p(0.5)
+    with pytest.raises(ValueError, match="outside"):
+        board.new_episode(np.random.default_rng(0), guaranteed_safe=((3, 0),))
 
 
 def test_reveal_before_new_episode_raises() -> None:

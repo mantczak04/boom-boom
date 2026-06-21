@@ -7,6 +7,8 @@ from dataclasses import dataclass
 
 from prob_minesweeper.board import RevealResult
 
+REWARD_MODES = ("risk_adjusted", "sparse", "uniform", "completion")
+
 
 @dataclass(frozen=True)
 class RewardConfig:
@@ -54,5 +56,29 @@ class RewardConfig:
             win_bonus=1.0,
         )
 
+    @classmethod
+    def completion(cls) -> RewardConfig:
+        """Reward board completion without exposing local mine risk."""
+        return cls(
+            reveal_reward_fn=lambda _p: 0.1,
+            mine_penalty_fn=lambda _p: -1.0,
+            win_bonus=10.0,
+        )
 
-__all__ = ["RewardConfig"]
+
+def make_reward_config(mode: str) -> RewardConfig:
+    """Build a reward configuration from its CLI/UI name."""
+    factories = {
+        "risk_adjusted": RewardConfig.risk_adjusted,
+        "sparse": RewardConfig.sparse,
+        "uniform": RewardConfig.uniform,
+        "completion": RewardConfig.completion,
+    }
+    try:
+        return factories[mode]()
+    except KeyError as exc:
+        valid = ", ".join(REWARD_MODES)
+        raise ValueError(f"reward mode {mode!r} must be one of: {valid}") from exc
+
+
+__all__ = ["REWARD_MODES", "RewardConfig", "make_reward_config"]

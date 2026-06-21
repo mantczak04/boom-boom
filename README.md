@@ -5,6 +5,23 @@ probability `p ∈ [0, 1]`. Hidden mine outcomes are sampled at episode start fr
 `Bernoulli(p_mine)`; the agent does not observe those outcomes until revealing cells.
 Built as a [Gymnasium](https://gymnasium.farama.org/) environment (`ProbMinesweeper-v0`).
 
+## Hidden-risk RL mode
+
+The RL-focused variant hides `p_mine` from the agent (`obs_mode="state"`) and shows
+the actual number of neighbouring mines after a safe reveal
+(`clue_mode="actual_count"`). Its completion reward is `+0.1` for a safe reveal,
+`-1` for a mine, and an additional `+10` for winning. An action therefore affects
+both immediate reward and the clues available for later decisions.
+
+Episodes start with a uniformly selected safe 2×2 block already revealed. These
+four automatic reveals provide initial clues, give no reward, and consume no steps.
+One additional cell outside the block is guaranteed safe but remains hidden, which
+prevents an episode from already being complete at reset. Use
+`initial_reveal="none"` to disable this rule.
+
+The original full-information mode remains available with `obs_mode="state+prob"`,
+`clue_mode="prob_sum"`, and the risk-adjusted reward.
+
 ## Requirements
 
 - Python **3.11+**
@@ -45,9 +62,10 @@ description of the reinforcement-learning model:
 uv run streamlit run app.py
 ```
 
-The sidebar configures the board and probability distribution. In the Game tab, use
-either the cell buttons or the Random, Min-risk, and (when trained) DQN agent controls.
-The Benchmark tab evaluates available agents over reproducible episodes.
+The sidebar configures the board, probability distribution, clue mode, and reward.
+In the Game tab, use either the cell buttons or the Random, Min-risk (oracle), and
+(when trained) DQN controls. The Benchmark tab evaluates agents in the selected rule
+variant over reproducible episodes.
 
 ### DQN agent
 
@@ -56,18 +74,21 @@ evaluate it, and start the application with:
 
 ```bash
 uv sync --dev --extra rl
-uv run python experiments/train_dqn.py --timesteps 50000
-uv run python experiments/evaluate_dqn.py --episodes 100
+uv run python experiments/train_dqn.py --timesteps 500000
+uv run python experiments/evaluate_dqn.py --episodes 500
 uv run streamlit run app.py
 ```
 
-Training saves `models/dqn_prob_minesweeper.zip`. Use matching `--width`, `--height`,
-and `--distribution` options when training and evaluating a non-default model. For a
+Training defaults to the hidden-risk configuration and saves
+`models/dqn_prob_minesweeper.zip`. A DQN model is tied to its board size and
+observation shape and opening rule. Use matching `--width`, `--height`, `--obs-mode`,
+`--clue-mode`, `--initial-reveal`, and `--reward-mode` when evaluating it. For a
 quick end-to-end check, reduce `--timesteps` to `1000`.
 
 If no trained model exists, the Streamlit app still works with RandomAgent and
 MinRiskAgent. DQN predictions that target an already revealed cell are replaced by a
-valid Min-risk action during evaluation and in the application.
+valid fallback action during evaluation and in the application. Every `.zip` model
+stored directly in `models/` appears in the application's sidebar model dropdown.
 
 ### Interactive play
 
@@ -115,6 +136,19 @@ uv run prob-minesweeper benchmark \
   --seed 42
 ```
 
+Run the hidden-risk benchmark explicitly with:
+
+```bash
+uv run prob-minesweeper benchmark \
+  --episodes 100 \
+  --width 5 \
+  --height 5 \
+  --obs-mode state \
+  --clue-mode actual_count \
+  --initial-reveal safe_2x2 \
+  --reward-mode completion
+```
+
 ### Use as a Gymnasium environment
 
 After install, import the package to register the env, then use `gym.make`:
@@ -134,7 +168,8 @@ env.close()
 
 Key constructor kwargs: `width`, `height`, `distribution`, `distribution_kwargs`,
 `obs_mode` (`"state"` or `"state+prob"`), `render_mode` (`None`, `"human"`, `"rgb_array"`),
-`seed`.
+`clue_mode` (`"prob_sum"` or `"actual_count"`), `reward_config`, and `seed`.
+`initial_reveal` accepts `"none"` or `"safe_2x2"`.
 
 ## Test
 
@@ -186,12 +221,13 @@ uv.lock             # locked dependency versions (uv)
 ## Agents
 
 - **Random** samples uniformly from actions allowed by `action_mask`.
-- **Min-risk** reveals the valid cell with the smallest known mine probability.
+- **Min-risk (oracle)** reveals the valid cell with the smallest hidden mine
+  probability. It has privileged information in hidden-risk mode.
 - **DQN** loads a trained Stable-Baselines3 action-value model and safely handles
   invalid predictions using `action_mask`.
 
-Random and Min-risk are reusable baselines. DQN is a learned policy compared against
-both reference strategies.
+Random is a visible-state baseline. DQN is a learned visible-state policy. Min-risk
+is an upper-reference oracle in hidden-risk comparisons, not a fair baseline.
 
 ## Benchmarking
 
@@ -203,8 +239,9 @@ repeatable.
 
 The environment is an MDP: the state contains revealed-cell state and optionally the
 probability field, an action reveals one cell, and transitions depend on hidden mine
-outcomes sampled at reset. The risk-adjusted reward encourages safe progress and adds
-a win bonus. The objective is to maximize expected discounted return.
+outcomes sampled at reset. In hidden-risk mode, actual-count clues make revealed
+information relevant to subsequent actions. The objective is to maximize expected
+discounted return.
 
 ## Project scope for grade 4.0
 

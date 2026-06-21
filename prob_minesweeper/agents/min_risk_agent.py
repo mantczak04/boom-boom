@@ -1,4 +1,4 @@
-"""Minimum known mine-risk baseline."""
+"""Minimum mine-risk baseline with privileged probability access."""
 
 from typing import Any
 
@@ -6,6 +6,8 @@ import numpy as np
 
 
 class MinRiskAgent:
+    """Use hidden ``p_mine`` values; an oracle in hidden-risk mode."""
+
     name = "Min-risk"
 
     def select_action(self, obs: np.ndarray, info: dict[str, Any], env: Any) -> int:

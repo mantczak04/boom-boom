@@ -34,6 +34,11 @@ def test_env_checker(obs_mode: str) -> None:
         env.close()
 
 
+def test_env_checker_with_safe_opening() -> None:
+    env = _env(initial_reveal="safe_2x2", clue_mode="actual_count")
+    check_env(env, skip_render_check=True)
+
+
 def test_gym_make_registered_env() -> None:
     env = gym.make("ProbMinesweeper-v0", width=4, height=4)
     try:
@@ -43,6 +48,66 @@ def test_gym_make_registered_env() -> None:
         assert env.spec.id == "ProbMinesweeper-v0"
     finally:
         env.close()
+
+
+def test_gym_make_actual_count_env() -> None:
+    env = gym.make(
+        "ProbMinesweeper-v0",
+        width=3,
+        height=3,
+        distribution="constant",
+        distribution_kwargs={"p": 0.0},
+        clue_mode="actual_count",
+    )
+    try:
+        obs, info = env.reset(seed=0)
+        obs, _, _, _, _ = env.step(int(np.flatnonzero(info["action_mask"])[0]))
+        assert env.observation_space.contains(obs)
+        assert env.unwrapped.board.cell(0, 0).display_value == 0.0
+    finally:
+        env.close()
+
+
+def test_safe_2x2_opening_is_revealed_safe_and_connected() -> None:
+    env = _env(
+        width=4,
+        height=4,
+        distribution=ConstantDistribution(p=1.0),
+        clue_mode="actual_count",
+        initial_reveal="safe_2x2",
+    )
+    obs, info = env.reset(seed=7)
+
+    revealed = np.argwhere(env.board.revealed_mask())
+    assert len(revealed) == 4
+    assert len(set(revealed[:, 0])) == 2
+    assert len(set(revealed[:, 1])) == 2
+    assert set(revealed[:, 0]) == set(
+        range(revealed[:, 0].min(), revealed[:, 0].max() + 1)
+    )
+    assert set(revealed[:, 1]) == set(
+        range(revealed[:, 1].min(), revealed[:, 1].max() + 1)
+    )
+    assert not env.board.hidden_mine_mask()[env.board.revealed_mask()].any()
+    assert env.board.hidden_mine_mask().size - env.board.hidden_mine_mask().sum() == 5
+    assert not env.board.is_win()
+    assert not env.board.is_loss()
+    assert env._step_count == 0
+    assert info["action_mask"].sum() == 12
+    assert np.all(obs[..., 0][env.board.revealed_mask()] == 1.0)
+    assert env.observation_space.contains(obs)
+
+
+def test_safe_2x2_opening_is_seed_reproducible() -> None:
+    env_a = _env(initial_reveal="safe_2x2")
+    env_b = _env(initial_reveal="safe_2x2")
+    obs_a, info_a = env_a.reset(seed=42)
+    obs_b, info_b = env_b.reset(seed=42)
+    np.testing.assert_array_equal(obs_a, obs_b)
+    np.testing.assert_array_equal(info_a["action_mask"], info_b["action_mask"])
+    np.testing.assert_array_equal(
+        env_a.board.hidden_mine_mask(), env_b.board.hidden_mine_mask()
+    )
 
 
 def test_observation_channels() -> None:
@@ -290,6 +355,22 @@ def test_win_reward_includes_bonus() -> None:
 def test_invalid_obs_mode_raises() -> None:
     with pytest.raises(ValueError, match="obs_mode"):
         _env(obs_mode="invalid")
+
+
+def test_invalid_clue_mode_raises() -> None:
+    with pytest.raises(ValueError, match="clue_mode"):
+        _env(clue_mode="invalid")
+
+
+def test_invalid_initial_reveal_raises() -> None:
+    with pytest.raises(ValueError, match="initial_reveal"):
+        _env(initial_reveal="invalid")
+
+
+@pytest.mark.parametrize(("width", "height"), [(1, 5), (5, 1), (2, 2)])
+def test_safe_2x2_opening_rejects_too_small_board(width: int, height: int) -> None:
+    with pytest.raises(ValueError, match="at least one additional cell"):
+        _env(width=width, height=height, initial_reveal="safe_2x2")
 
 
 def test_step_before_reset_raises() -> None:
