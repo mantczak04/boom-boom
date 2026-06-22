@@ -1,4 +1,4 @@
-"""Evaluate a saved DQN model without retraining it."""
+"""Evaluate a saved MaskablePPO model without retraining it."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import argparse
 from pathlib import Path
 
 from experiments.common import add_distribution_args, build_distribution_kwargs
-from prob_minesweeper.agents import DQNAgent
+from prob_minesweeper.agents import MaskablePPOAgent
 from prob_minesweeper.evaluation import EvaluationResult, evaluate_agent
 from prob_minesweeper.rewards import REWARD_MODES, make_reward_config
 
@@ -14,7 +14,9 @@ from prob_minesweeper.rewards import REWARD_MODES, make_reward_config
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--model", type=Path, default=Path("models/dqn_prob_minesweeper.zip")
+        "--model",
+        type=Path,
+        default=Path("models/maskable_ppo_prob_minesweeper.zip"),
     )
     parser.add_argument("--episodes", type=int, default=100)
     parser.add_argument("--width", type=int, default=5)
@@ -60,6 +62,7 @@ def print_result(result: EvaluationResult) -> None:
 def main() -> None:
     args = build_parser().parse_args()
     distribution_kwargs = build_distribution_kwargs(args)
+
     print("Environment configuration")
     configuration = (
         ("width", args.width),
@@ -75,7 +78,8 @@ def main() -> None:
     for label, value in configuration:
         print(f"{label:<{label_width}} : {value}")
     print()
-    agent = DQNAgent(args.model)
+
+    agent = MaskablePPOAgent(args.model)
     result = evaluate_agent(
         agent,
         episodes=args.episodes,

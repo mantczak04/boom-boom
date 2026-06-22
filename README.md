@@ -64,8 +64,8 @@ uv run streamlit run app.py
 
 The sidebar configures the board, probability distribution, clue mode, and reward.
 In the Game tab, use either the cell buttons or the Random, Min-risk (oracle), and
-(when trained) DQN controls. The Benchmark tab evaluates agents in the selected rule
-variant over reproducible episodes.
+(when trained) DQN and MaskablePPO controls. The Benchmark tab evaluates agents in
+the selected rule variant over reproducible episodes.
 
 ### DQN agent
 
@@ -87,8 +87,82 @@ quick end-to-end check, reduce `--timesteps` to `1000`.
 
 If no trained model exists, the Streamlit app still works with RandomAgent and
 MinRiskAgent. DQN predictions that target an already revealed cell are replaced by a
-valid fallback action during evaluation and in the application. Every `.zip` model
-stored directly in `models/` appears in the application's sidebar model dropdown.
+random valid fallback action during evaluation and in the application. The comparison
+script reports DQN's invalid-action rate. DQN model dropdowns exclude
+`maskable_ppo_*.zip` files.
+
+### MaskablePPO agent
+
+MaskablePPO is provided through `sb3-contrib`. It uses the environment's valid-action
+mask during training and inference. This addresses the main limitation of the basic
+DQN setup, where invalid revealed-cell actions are not masked during learning.
+
+Install RL dependencies:
+
+```bash
+uv sync --dev --extra rl
+```
+
+Train the default hidden-risk 5x5 model:
+
+```bash
+uv run python experiments/train_maskable_ppo.py --timesteps 100000
+```
+
+Evaluate it:
+
+```bash
+uv run python experiments/evaluate_maskable_ppo.py --episodes 500
+```
+
+Compare all available agents:
+
+```bash
+uv run python experiments/compare_rl_agents.py --episodes 500
+```
+
+The default model is saved to:
+
+```text
+models/maskable_ppo_prob_minesweeper.zip
+```
+
+MaskablePPO models are tied to board size and observation shape, like DQN models.
+Use matching `--width`, `--height`, `--obs-mode`, `--clue-mode`,
+`--initial-reveal`, and `--reward-mode` during training and evaluation.
+
+### Recommended experiments
+
+Easier learning regime:
+
+```bash
+uv run python experiments/train_maskable_ppo.py \
+  --timesteps 100000 \
+  --width 5 \
+  --height 5 \
+  --distribution constant \
+  --p 0.15 \
+  --obs-mode state \
+  --clue-mode actual_count \
+  --initial-reveal safe_2x2 \
+  --reward-mode completion \
+  --output models/maskable_ppo_easy_constant_p015_100k.zip
+```
+
+Hard hidden-risk stress test:
+
+```bash
+uv run python experiments/train_maskable_ppo.py \
+  --timesteps 100000 \
+  --width 5 \
+  --height 5 \
+  --distribution correlated \
+  --obs-mode state \
+  --clue-mode actual_count \
+  --initial-reveal safe_2x2 \
+  --reward-mode completion \
+  --output models/maskable_ppo_hidden_risk_safe2x2_100k.zip
+```
 
 ### Interactive play
 
@@ -223,8 +297,11 @@ uv.lock             # locked dependency versions (uv)
 - **Random** samples uniformly from actions allowed by `action_mask`.
 - **Min-risk (oracle)** reveals the valid cell with the smallest hidden mine
   probability. It has privileged information in hidden-risk mode.
-- **DQN** loads a trained Stable-Baselines3 action-value model and safely handles
-  invalid predictions using `action_mask`.
+- **DQN** loads a trained Stable-Baselines3 action-value model. It uses random
+  valid-action fallback for fair evaluation when it predicts an invalid revealed
+  cell. Its invalid-action rate is reported in comparison runs.
+- **MaskablePPO** loads a trained sb3-contrib masked policy-gradient model and uses
+  `action_mask` to avoid already revealed cells during training and inference.
 
 Random is a visible-state baseline. DQN is a learned visible-state policy. Min-risk
 is an upper-reference oracle in hidden-risk comparisons, not a fair baseline.
@@ -253,4 +330,4 @@ material. Report screenshots should be added to `report/screenshots/` before sub
 
 Runtime: `gymnasium`, `numpy`, `scipy`, `streamlit`. Dev: `pytest` (via
 `[project.optional-dependencies] dev`). Optional RL dependencies, including
-`stable-baselines3`, are installed through the `rl` extra.
+`stable-baselines3` and `sb3-contrib`, are installed through the `rl` extra.

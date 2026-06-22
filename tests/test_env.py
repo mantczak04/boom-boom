@@ -144,6 +144,17 @@ def test_action_mask_masks_revealed_cells() -> None:
     assert info["action_mask"].sum() == 8
 
 
+def test_action_masks_method_matches_info_mask() -> None:
+    env = _env(distribution=ConstantDistribution(p=0.0))
+    _, info = env.reset(seed=0)
+
+    np.testing.assert_array_equal(env.action_masks(), info["action_mask"])
+    assert env.action_masks().dtype == np.bool_
+
+    env.step(0)
+    assert not env.action_masks()[0]
+
+
 def test_action_mask_excludes_revealed_through_episode() -> None:
     """No revealed cell may appear as a valid action at any step."""
     env = _env(distribution=ConstantDistribution(p=0.0))

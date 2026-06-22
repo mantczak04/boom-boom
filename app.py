@@ -8,7 +8,7 @@ from typing import Any
 
 import streamlit as st
 
-from prob_minesweeper.agents import DQNAgent, MinRiskAgent, RandomAgent
+from prob_minesweeper.agents import DQNAgent, MaskablePPOAgent, MinRiskAgent, RandomAgent
 from prob_minesweeper.env import ProbMinesweeperEnv
 from prob_minesweeper.evaluation import compare_agents
 from prob_minesweeper.rewards import make_reward_config
@@ -239,11 +239,34 @@ def _agent() -> Any:
         if model_path is None:
             raise RuntimeError("No DQN model is selected")
         return _load_dqn_agent(str(model_path), model_path.stat().st_mtime_ns)
+    if st.session_state.selected_agent == "MaskablePPO":
+        model_path = _selected_maskable_ppo_model_path()
+        if model_path is None:
+            raise RuntimeError("No MaskablePPO model is selected")
+        return _load_maskable_ppo_agent(str(model_path), model_path.stat().st_mtime_ns)
     return MinRiskAgent()
 
 
 def _dqn_model_paths() -> list[Path]:
-    return sorted(DQN_MODELS_DIR.glob("*.zip"), key=lambda path: path.name.lower())
+    return sorted(
+        (
+            path
+            for path in DQN_MODELS_DIR.glob("*.zip")
+            if not path.name.lower().startswith("maskable_ppo")
+        ),
+        key=lambda path: path.name.lower(),
+    )
+
+
+def _maskable_ppo_model_paths() -> list[Path]:
+    return sorted(
+        (
+            path
+            for path in DQN_MODELS_DIR.glob("*.zip")
+            if path.name.lower().startswith("maskable_ppo")
+        ),
+        key=lambda path: path.name.lower(),
+    )
 
 
 def _selected_dqn_model_path() -> Path | None:
@@ -254,10 +277,25 @@ def _selected_dqn_model_path() -> Path | None:
     return path if path.is_file() else None
 
 
+def _selected_maskable_ppo_model_path() -> Path | None:
+    model_name = st.session_state.get("maskable_ppo_model_selector")
+    if not model_name:
+        return None
+    path = DQN_MODELS_DIR / str(model_name)
+    return path if path.is_file() else None
+
+
 def _dqn_available() -> bool:
     return (
         _selected_dqn_model_path() is not None
         and importlib.util.find_spec("stable_baselines3") is not None
+    )
+
+
+def _maskable_ppo_available() -> bool:
+    return (
+        _selected_maskable_ppo_model_path() is not None
+        and importlib.util.find_spec("sb3_contrib") is not None
     )
 
 
@@ -281,6 +319,30 @@ def _dqn_compatible(width: int, height: int) -> bool:
 def _load_dqn_agent(model_path: str, model_mtime_ns: int) -> DQNAgent:
     del model_mtime_ns  # It is part of the cache key and reloads replaced models.
     return DQNAgent(model_path)
+
+
+@st.cache_resource
+def _load_maskable_ppo_agent(
+    model_path: str, model_mtime_ns: int
+) -> MaskablePPOAgent:
+    del model_mtime_ns
+    return MaskablePPOAgent(model_path)
+
+
+def _maskable_ppo_compatible(width: int, height: int) -> bool:
+    """Return whether the selected MaskablePPO accepts this app's state input."""
+    if not _maskable_ppo_available():
+        return False
+    model_path = _selected_maskable_ppo_model_path()
+    if model_path is None:
+        return False
+    try:
+        agent = _load_maskable_ppo_agent(str(model_path), model_path.stat().st_mtime_ns)
+    except (ImportError, OSError, RuntimeError, ValueError):
+        return False
+    model_space = getattr(agent.model, "observation_space", None)
+    expected_shape = getattr(model_space, "shape", None)
+    return tuple(expected_shape or ()) == (width * height * 3,)
 
 
 def _revealed_cell_html(cell: Any, clue_mode: str) -> str:
@@ -348,8 +410,11 @@ def _render_game(show_probabilities: bool) -> None:
 
     agent_options = ["Random", "Min-risk (oracle)"]
     dqn_compatible = _dqn_compatible(env.width, env.height)
+    maskable_ppo_compatible = _maskable_ppo_compatible(env.width, env.height)
     if dqn_compatible:
         agent_options.append("DQN")
+    if maskable_ppo_compatible:
+        agent_options.append("MaskablePPO")
     st.session_state.selected_agent = st.selectbox(
         "Agent", agent_options, index=1, key="agent_selector"
     )
@@ -364,6 +429,18 @@ def _render_game(show_probabilities: bool) -> None:
         st.info(
             "The selected DQN model is incompatible with this board size or the "
             "3-channel state observation. Select or train a matching model."
+        )
+    if not _maskable_ppo_model_paths():
+        st.info(
+            "MaskablePPO model not found. Train it with: "
+            "`uv run python experiments/train_maskable_ppo.py --timesteps 100000`"
+        )
+    elif not _maskable_ppo_available():
+        st.info("Install the RL dependencies with: `uv sync --dev --extra rl`")
+    elif not maskable_ppo_compatible:
+        st.info(
+            "The selected MaskablePPO model is incompatible with this board size or "
+            "the 3-channel state observation. Select or train a matching model."
         )
     move_col, run_col = st.columns(2)
     if move_col.button("Agent move", disabled=disabled_game, use_container_width=True):
@@ -405,6 +482,14 @@ def _benchmark_tab(
             if model_path is not None:
                 agents.append(
                     _load_dqn_agent(str(model_path), model_path.stat().st_mtime_ns)
+                )
+        if _maskable_ppo_compatible(width, height):
+            model_path = _selected_maskable_ppo_model_path()
+            if model_path is not None:
+                agents.append(
+                    _load_maskable_ppo_agent(
+                        str(model_path), model_path.stat().st_mtime_ns
+                    )
                 )
         with st.spinner("Evaluating agents..."):
             st.session_state.benchmark_results = compare_agents(
@@ -476,7 +561,14 @@ $$y = r + \gamma \max_{a'} Q(s',a'),$$
 $$L(\theta) = \left(y - Q_\theta(s,a)\right)^2.$$
 
 Stable-Baselines3 DQN does not apply the environment's `action_mask` during training.
-At inference time, an invalid prediction is replaced by a valid action. DQN models
+At inference time, an invalid prediction is replaced by a random valid action and
+the invalid-action rate is available in comparison runs.
+
+### MaskablePPO
+
+MaskablePPO comes from `sb3-contrib`. It uses the environment's valid-action mask
+during training and prediction, so already revealed cells are removed from the action
+distribution instead of being repaired after prediction. DQN and MaskablePPO models
 are tied to the training board size and observation mode; incompatible shapes raise
 a clear error.
 """
@@ -530,6 +622,20 @@ def main() -> None:
                 else 0
             ),
             key="dqn_model_selector",
+        )
+    maskable_ppo_models = _maskable_ppo_model_paths()
+    if maskable_ppo_models:
+        model_names = [path.name for path in maskable_ppo_models]
+        preferred_model = "maskable_ppo_prob_minesweeper.zip"
+        st.sidebar.selectbox(
+            "MaskablePPO model",
+            model_names,
+            index=(
+                model_names.index(preferred_model)
+                if preferred_model in model_names
+                else 0
+            ),
+            key="maskable_ppo_model_selector",
         )
     config = (
         int(width),

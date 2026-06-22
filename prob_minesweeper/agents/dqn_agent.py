@@ -10,12 +10,33 @@ import numpy as np
 from prob_minesweeper.agents.min_risk_agent import MinRiskAgent
 
 
+class RandomValidFallback:
+    name = "RandomValidFallback"
+
+    def __init__(self, seed: int | None = None) -> None:
+        self.rng = np.random.default_rng(seed)
+
+    def select_action(self, obs: np.ndarray, info: dict[str, Any], env: Any) -> int:
+        del obs, env
+        valid = np.flatnonzero(np.asarray(info["action_mask"], dtype=np.bool_))
+        if len(valid) == 0:
+            raise RuntimeError("No valid actions available")
+        return int(self.rng.choice(valid))
+
+
 class DQNAgent:
     """Load a trained DQN and ensure that it returns a legal board action."""
 
     name = "DQN"
 
-    def __init__(self, model_path: str | Path, fallback_agent: Any | None = None) -> None:
+    def __init__(
+        self,
+        model_path: str | Path,
+        fallback_agent: Any | None = None,
+        *,
+        fallback_mode: str = "random",
+        seed: int | None = None,
+    ) -> None:
         path = Path(model_path)
         if not path.is_file():
             raise FileNotFoundError(f"DQN model not found: {path}")
@@ -29,10 +50,18 @@ class DQNAgent:
             ) from exc
 
         self.model = DQN.load(path, device="cpu")
-        self.fallback_agent = (
-            fallback_agent if fallback_agent is not None else MinRiskAgent()
-        )
-        self._rng = np.random.default_rng()
+        if fallback_agent is not None:
+            self.fallback_agent = fallback_agent
+        elif fallback_mode == "min_risk":
+            self.fallback_agent = MinRiskAgent()
+        elif fallback_mode == "random":
+            self.fallback_agent = RandomValidFallback(seed)
+        else:
+            raise ValueError("fallback_mode must be 'random' or 'min_risk'")
+
+        self.predictions = 0
+        self.invalid_predictions = 0
+        self._rng = np.random.default_rng(seed)
 
     def select_action(
         self, obs: np.ndarray, info: dict[str, Any], env: Any
@@ -55,9 +84,11 @@ class DQNAgent:
             )
         predicted, _ = self.model.predict(flat_obs, deterministic=True)
         action = int(np.asarray(predicted).reshape(-1)[0])
+        self.predictions += 1
         if 0 <= action < len(mask) and mask[action]:
             return action
 
+        self.invalid_predictions += 1
         try:
             fallback_action = int(self.fallback_agent.select_action(obs, info, env))
             if 0 <= fallback_action < len(mask) and mask[fallback_action]:
@@ -67,5 +98,11 @@ class DQNAgent:
 
         return int(self._rng.choice(valid))
 
+    @property
+    def invalid_action_rate(self) -> float:
+        if self.predictions == 0:
+            return 0.0
+        return self.invalid_predictions / self.predictions
 
-__all__ = ["DQNAgent"]
+
+__all__ = ["DQNAgent", "RandomValidFallback"]

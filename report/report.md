@@ -4,7 +4,7 @@
 
 Celem jest aplikacja prezentująca probabilistyczny wariant Sapera jako środowisko
 uczenia ze wzmocnieniem (RL). Projekt łączy backend zgodny z Gymnasium, interfejs
-Streamlit oraz porównanie dwóch agentów bazowych z wytrenowanym agentem DQN.
+Streamlit oraz porównanie agentów bazowych z modelami DQN i MaskablePPO.
 
 ## 2. Opis problemu
 
@@ -74,7 +74,7 @@ już odkryte. Testy sprawdzają logikę domenową, API Gymnasium, agentów i ewa
 `RandomAgent` losuje jednostajnie spośród dozwolonych akcji. `MinRiskAgent` wybiera
 dozwolone pole o najmniejszym $p_{r,c}$; przy remisie wybiera pierwsze. W hidden-risk
 jest to oracle z uprzywilejowanym dostępem do ukrytej informacji, a nie uczciwa baza
-dla DQN. DQN i Random korzystają z widocznego stanu.
+dla modeli RL. DQN, MaskablePPO i Random korzystają z widocznego stanu.
 
 ## Deep Q-Network jako wykorzystany model RL
 
@@ -95,40 +95,67 @@ interakcji i uwzględnia zdyskontowane przyszłe nagrody.
 
 Stable-Baselines3 DQN nie wykorzystuje automatycznie `action_mask` podczas treningu.
 Podczas ewaluacji i demonstracji przewidziana już odkryta akcja jest zastępowana
-dozwoloną akcją `MinRiskAgent`; awaryjnie losowana jest dowolna akcja dozwolona. Model
-jest trenowany i oceniany na planszy o tym samym rozmiarze.
+losową akcją dozwoloną. Dla DQN raportujemy `invalid-action rate`, czyli odsetek
+predykcji wskazujących pole już odkryte. Model jest trenowany i oceniany na planszy
+o tym samym rozmiarze.
+
+## MaskablePPO jako model z maskowaniem akcji
+
+Drugim modelem RL jest MaskablePPO z pakietu `sb3-contrib`. W przeciwieństwie do
+podstawowego DQN, MaskablePPO wykorzystuje maskę dozwolonych akcji podczas uczenia
+i predykcji. W naszym środowisku maska blokuje pola już odkryte, więc agent nie traci
+kroków treningowych na akcje, które nie zmieniają stanu planszy.
+
+PPO uczy polityki stochastycznej bezpośrednio, a nie funkcji wartości każdej akcji
+tak jak DQN. Wariant z maską lepiej pasuje do Sapera, ponieważ liczba formalnie
+dostępnych akcji jest stała, ale część akcji staje się niedozwolona po odkryciu pól.
 
 ## 7. Eksperymenty
 
 Agenci są oceniani na tych samych konfiguracjach i sekwencjach seedów. Rejestrujemy
-liczbę zwycięstw, porażek i uciętych epizodów, średnią nagrodę oraz średnią liczbę
-kroków. Poniższy eksperyment używa planszy $5\times5$, rozkładu `correlated`,
-`obs_mode=state`, `clue_mode=actual_count`, `initial_reveal=safe_2x2`, nagrody
-`completion`, seedu początkowego 123 i 500 epizodów. Model DQN trenowano przez
-500 000 kroków z seedem 42.
+liczbę zwycięstw, porażek i uciętych epizodów, średnią nagrodę, średnią liczbę
+kroków oraz `invalid-action rate` dla DQN. Raport rozdziela dwa reżimy: łatwiejszy
+test uczenia i trudny stress test hidden-risk.
 
 ## 8. Wyniki
 
+### Łatwiejszy reżim uczenia: `constant p=0.15`
+
 | Agent | Epizody | Wygrane | Porażki | Ucięte | Win rate | Śr. nagroda | Śr. kroki |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| Random | 500 | 0 | 500 | 0 | 0,0% | -0,8806 | 2,194 |
-| DQN 500k | 500 | 4 | 496 | 0 | 0,8% | -0,4776 | 5,336 |
-| Min-risk (oracle) | 500 | 3 | 497 | 0 | 0,6% | -0,4316 | 6,018 |
+| Random | TODO | TODO | TODO | TODO | TODO | TODO | TODO |
+| Min-risk (oracle) | TODO | TODO | TODO | TODO | TODO | TODO | TODO |
+| DQN (random fallback) | TODO | TODO | TODO | TODO | TODO | TODO | TODO |
+| MaskablePPO | TODO | TODO | TODO | TODO | TODO | TODO | TODO |
 
-DQN osiągnął wyższą średnią nagrodę i więcej zwycięstw niż Random oraz o jedno
-zwycięstwo więcej niż Min-risk. Oracle zachował nieco wyższą średnią nagrodę dzięki
-dostępowi do ukrytego $p_{r,c}$. Niskie bezwzględne win rate pokazuje trudność
-wariantu i pozostawia miejsce na dłuższy trening lub algorytm wykorzystujący
-maskowanie akcji. Zrzuty interfejsu należy dodać do `report/screenshots/` przed
-oddaniem.
+DQN invalid-action rate: TODO
+
+### Trudny stress test hidden-risk: `correlated`
+
+| Agent | Epizody | Wygrane | Porażki | Ucięte | Win rate | Śr. nagroda | Śr. kroki |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Random | TODO | TODO | TODO | TODO | TODO | TODO | TODO |
+| Min-risk (oracle) | TODO | TODO | TODO | TODO | TODO | TODO | TODO |
+| DQN (random fallback) | TODO | TODO | TODO | TODO | TODO | TODO | TODO |
+| MaskablePPO | TODO | TODO | TODO | TODO | TODO | TODO | TODO |
+
+DQN invalid-action rate: TODO
+
+Łatwiejszy reżim pokazuje, czy pipeline RL uczy się użytecznej polityki w warunkach,
+w których gra jest realnie wygrywalna. Trudny reżim `correlated` traktujemy jako
+stress test. Jeśli nawet Min-risk oracle ma niski win rate, to średnia nagroda,
+średnia liczba kroków i invalid-action rate DQN są bardziej informacyjne niż sam
+win rate. Zrzuty interfejsu należy dodać do `report/screenshots/` przed oddaniem.
 
 ## 9. Wnioski
 
 Porównanie pokazuje wpływ uprzywilejowanej informacji o ryzyku i uczenia wartości
 przyszłych nagród na strategię. `MinRiskAgent` może osiągać lepsze wyniki, ponieważ
 bezpośrednio korzysta z ukrytego $p_{r,c}$ jako oracle. DQN pozostaje jednak polityką
-wyuczoną, a nie z góry zapisaną regułą. Ograniczeniami są niestabilność treningu,
-brak maskowania akcji w samym algorytmie oraz zależność modelu od rozmiaru planszy.
+wyuczoną, a nie z góry zapisaną regułą. MaskablePPO jest czystszą metodą RL dla tego
+środowiska, ponieważ korzysta z maski akcji w samym algorytmie. Nie zakładamy jednak,
+że musi pokonać oracle Min-risk. Ograniczeniami są niestabilność treningu i zależność
+modeli od rozmiaru planszy.
 
 ## 10. Instrukcja uruchomienia
 
@@ -137,5 +164,8 @@ uv sync --dev --extra rl
 uv run pytest -q
 uv run python experiments/train_dqn.py --timesteps 500000
 uv run python experiments/evaluate_dqn.py --episodes 500
+uv run python experiments/train_maskable_ppo.py --timesteps 100000
+uv run python experiments/evaluate_maskable_ppo.py --episodes 500
+uv run python experiments/compare_rl_agents.py --episodes 500
 uv run streamlit run app.py
 ```

@@ -33,3 +33,18 @@ def test_step_works_through_flatten_wrapper():
         assert next_info["action_mask"].shape == (4,)
     finally:
         env.close()
+
+
+def test_flatten_wrapper_delegates_action_masks():
+    env = FlattenObservationWrapper(
+        ProbMinesweeperEnv(width=3, height=3, distribution="constant")
+    )
+    try:
+        _, info = env.reset(seed=0)
+        np.testing.assert_array_equal(env.action_masks(), info["action_mask"])
+        assert env.action_masks().dtype == np.bool_
+
+        env.step(0)
+        assert not env.action_masks()[0]
+    finally:
+        env.close()

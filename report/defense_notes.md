@@ -29,8 +29,9 @@
 14. **Jaki jest cel Bellmana?** `y = r + γ max_a' Q(s',a')`. Uczenie minimalizuje
     kwadrat różnicy między `y` a bieżącym `Q(s,a)`.
 15. **Jak obsługiwane jest maskowanie akcji?** Standardowy DQN ze Stable-Baselines3
-    nie używa `action_mask` podczas treningu. Podczas demonstracji błędna akcja jest
-    zastępowana dozwoloną akcją Min-risk, a w ostatniej kolejności losową dozwoloną.
+    nie używa `action_mask` podczas treningu. Podczas demonstracji i ewaluacji błędna
+    akcja jest zastępowana losową akcją dozwoloną. MaskablePPO używa maski akcji
+    bezpośrednio podczas uczenia i predykcji.
 16. **Dlaczego Min-risk może wygrać z DQN?** Ma bezpośredni dostęp do `p_mine` i jest
     silną heurystyką lokalną. DQN uczy się przez interakcję, więc przy małej liczbie
     kroków treningowych może gorzej przybliżać wartości. Nie musi wygrać, aby pokazać
@@ -52,6 +53,22 @@
 23. **Jak blok jest bezpieczny?** Po wylosowaniu losowej pozycji cztery wyniki min
     w bloku są wymuszane jako bezpieczne. Jedno dodatkowe ukryte pole także jest
     bezpieczne, aby epizod nie był wygrany już przy resecie.
+24. **Dlaczego dodano MaskablePPO?** Ponieważ podstawowy DQN ze Stable-Baselines3
+    nie używa `action_mask` podczas treningu. MaskablePPO obsługuje maskowanie akcji,
+    więc lepiej pasuje do gry, w której część pól staje się niedozwolona.
+25. **Czym różni się DQN od MaskablePPO?** DQN uczy funkcji wartości akcji `Q(s,a)`,
+    a PPO uczy bezpośrednio polityki wyboru akcji. MaskablePPO dodatkowo zeruje
+    prawdopodobieństwo wyboru akcji niedozwolonych.
+26. **Czy Min-risk jest uczciwym baseline'em?** Nie w hidden-risk. Min-risk korzysta
+    z ukrytego `p_mine`, którego modele RL w trybie `state` nie obserwują. Dlatego
+    jest oracle/reference, a nie fair baseline.
+27. **Po co mierzyć invalid-action rate DQN?** To pokazuje, jak często DQN wybiera
+    formalnie istniejącą, ale niedozwoloną akcję, czyli odkryte pole. MaskablePPO
+    rozwiązuje ten problem przez maskowanie podczas uczenia i predykcji.
+28. **Dlaczego są dwa reżimy eksperymentów?** Łatwiejszy reżim sprawdza, czy agent
+    potrafi nauczyć się użytecznej polityki, a trudny reżim hidden-risk pokazuje
+    ograniczenia i trudność oryginalnego środowiska.
 
-Random jest bazą, Min-risk jest oracle, a DQN jest trenowanym modelem RL. Wyniki
-należy porównywać przy tych samych rozmiarach planszy, rozkładach, trybach i seedach.
+Random jest bazą, Min-risk jest oracle, a DQN i MaskablePPO są trenowanymi modelami
+RL. Wyniki należy porównywać przy tych samych rozmiarach planszy, rozkładach, trybach
+i seedach.

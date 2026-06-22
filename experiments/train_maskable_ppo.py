@@ -1,4 +1,4 @@
-"""Train a Stable-Baselines3 DQN on probabilistic Minesweeper."""
+"""Train sb3-contrib MaskablePPO on probabilistic Minesweeper."""
 
 from __future__ import annotations
 
@@ -6,13 +6,15 @@ import argparse
 from pathlib import Path
 from typing import Any
 
+import numpy as np
+
 from experiments.common import add_distribution_args, build_distribution_kwargs
 from prob_minesweeper.env import ProbMinesweeperEnv
 from prob_minesweeper.rewards import REWARD_MODES, make_reward_config
 from prob_minesweeper.wrappers import FlattenObservationWrapper
 
 
-def make_dqn_env(
+def make_maskable_ppo_env(
     *,
     width: int = 5,
     height: int = 5,
@@ -61,28 +63,32 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--reward-mode", choices=REWARD_MODES, default="completion"
     )
-    parser.add_argument("--timesteps", type=int, default=500_000)
+    parser.add_argument("--timesteps", type=int, default=100_000)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--verbose", type=int, choices=(0, 1, 2), default=1)
     parser.add_argument(
-        "--output", type=Path, default=Path("models/dqn_prob_minesweeper.zip")
+        "--output",
+        type=Path,
+        default=Path("models/maskable_ppo_prob_minesweeper.zip"),
     )
     return parser
 
 
 def train(args: argparse.Namespace) -> Path:
     try:
-        from stable_baselines3 import DQN
+        from sb3_contrib import MaskablePPO
     except ImportError as exc:
         raise SystemExit(
-            "Stable-Baselines3 is required. Run `uv sync --dev --extra rl`."
+            "sb3-contrib is required. Run `uv sync --dev --extra rl`."
         ) from exc
 
     if args.timesteps < 1:
         raise ValueError("timesteps must be >= 1")
+
     args.output.parent.mkdir(parents=True, exist_ok=True)
     distribution_kwargs = build_distribution_kwargs(args)
-    env = make_dqn_env(
+
+    env = make_maskable_ppo_env(
         width=args.width,
         height=args.height,
         distribution=args.distribution,
@@ -93,35 +99,43 @@ def train(args: argparse.Namespace) -> Path:
         reward_mode=args.reward_mode,
         seed=args.seed,
     )
-    model: Any = DQN(
+
+    mask = env.action_masks()
+    if mask.shape != (args.width * args.height,):
+        raise RuntimeError(f"Invalid action mask shape: {mask.shape}")
+    if mask.dtype != np.bool_:
+        raise RuntimeError(f"Invalid action mask dtype: {mask.dtype}")
+
+    model: Any = MaskablePPO(
         "MlpPolicy",
         env,
-        learning_rate=5e-4,
-        buffer_size=100_000,
-        learning_starts=5_000,
+        learning_rate=3e-4,
+        n_steps=512,
         batch_size=64,
+        n_epochs=10,
         gamma=0.98,
-        exploration_fraction=0.4,
-        exploration_final_eps=0.05,
-        target_update_interval=1_000,
-        train_freq=4,
-        gradient_steps=1,
+        gae_lambda=0.95,
+        clip_range=0.2,
+        ent_coef=0.01,
+        vf_coef=0.5,
         device="cpu",
         verbose=args.verbose,
         seed=args.seed,
     )
+
     try:
         model.learn(total_timesteps=args.timesteps)
         model.save(args.output)
     finally:
         env.close()
+
     return args.output
 
 
 def main() -> None:
     args = build_parser().parse_args()
     output = train(args)
-    print(f"Saved DQN model to {output}")
+    print(f"Saved MaskablePPO model to {output}")
 
 
 if __name__ == "__main__":

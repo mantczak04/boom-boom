@@ -1306,6 +1306,7 @@ rl = [
     { name = "fastapi" },
     { name = "matplotlib" },
     { name = "pydantic" },
+    { name = "sb3-contrib" },
     { name = "stable-baselines3" },
     { name = "torch" },
     { name = "tqdm" },
@@ -1325,8 +1326,9 @@ requires-dist = [
     { name = "numpy", specifier = ">=1.24" },
     { name = "pydantic", marker = "extra == 'rl'" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
+    { name = "sb3-contrib", marker = "extra == 'rl'", specifier = ">=2.9,<2.10" },
     { name = "scipy", specifier = ">=1.11" },
-    { name = "stable-baselines3", marker = "extra == 'rl'", specifier = ">=2.3" },
+    { name = "stable-baselines3", marker = "extra == 'rl'", specifier = ">=2.9,<2.10" },
     { name = "streamlit", specifier = ">=1.35" },
     { name = "torch", marker = "extra == 'rl'" },
     { name = "tqdm", marker = "extra == 'rl'" },
@@ -1815,6 +1817,18 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/1d/6f/93831a3bfe789542ed0c1d0d74b78b440f055d6dc3ea4640eba2d95e6e23/rpds_py-2026.5.1-pp311-pypy311_pp73-musllinux_1_2_aarch64.whl", hash = "sha256:c74005a7bb87752acf351c93897ec63ad77a07a0da7ecad9c050e32e7286ba34", size = 557243, upload-time = "2026-05-28T12:02:08.013Z" },
     { url = "https://files.pythonhosted.org/packages/1f/ff/0b3d604614ffc77522c6b288fdbce68957eb583da1002aa65ba38ac0ee40/rpds_py-2026.5.1-pp311-pypy311_pp73-musllinux_1_2_i686.whl", hash = "sha256:8213afbe8a3a906fb9acb2014423fe3359ee783d0bf90995f70623a3217bfa6c", size = 623541, upload-time = "2026-05-28T12:02:09.661Z" },
     { url = "https://files.pythonhosted.org/packages/ea/ea/e7b0251441da9adfeaebcf29601d10f2a1455fcf0772fae9e7e19032bd96/rpds_py-2026.5.1-pp311-pypy311_pp73-musllinux_1_2_x86_64.whl", hash = "sha256:8c43a8a973270fd173bf48cdf80bbe66312421cba68d40845034f174f2389049", size = 586326, upload-time = "2026-05-28T12:02:11.47Z" },
+]
+
+[[package]]
+name = "sb3-contrib"
+version = "2.9.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "stable-baselines3" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/8f/8e/476222d88ba09dce0feebf6fb30b55e4dd0c80be5b19dc7b40d12d70752a/sb3_contrib-2.9.0.tar.gz", hash = "sha256:6e839c669552ecb3deb616a42ea98ed5e6c599eb5ac5f86232415b87a3873699", size = 90312, upload-time = "2026-06-15T17:06:08.8Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/c3/06/add3f1d6250f58ca493830ddb2118975aa3c4433bc07662d5ac5089eb691/sb3_contrib-2.9.0-py3-none-any.whl", hash = "sha256:b492b2be792f8f8214ff6b984e94812dc877f809ae82302cbe00626442ae316a", size = 93042, upload-time = "2026-06-15T17:06:07.452Z" },
 ]
 
 [[package]]

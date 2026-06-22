@@ -176,6 +176,10 @@ class ProbMinesweeperEnv(gym.Env):
         revealed = self.board.revealed_mask().reshape(-1)
         return (~revealed).astype(np.bool_)
 
+    def action_masks(self) -> np.ndarray:
+        """Return a boolean valid-action mask for sb3-contrib MaskablePPO."""
+        return self._action_mask()
+
     def _get_info(self) -> dict[str, Any]:
         return {"action_mask": self._action_mask()}
 

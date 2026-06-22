@@ -25,5 +25,12 @@ class FlattenObservationWrapper(gym.ObservationWrapper):
     def observation(self, observation: np.ndarray) -> np.ndarray:
         return np.asarray(observation, dtype=np.float32).reshape(-1)
 
+    def action_masks(self) -> np.ndarray:
+        """Delegate valid-action masks to the wrapped environment for MaskablePPO."""
+        action_masks = getattr(self.env, "action_masks", None)
+        if action_masks is None:
+            raise AttributeError("Wrapped environment does not expose action_masks()")
+        return np.asarray(action_masks(), dtype=np.bool_)
+
 
 __all__ = ["FlattenObservationWrapper"]
